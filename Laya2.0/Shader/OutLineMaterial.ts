@@ -30,9 +30,12 @@ export default class OutlineMaterial extends Laya.BaseMaterial {
         var attributeMap = {
             'a_Position': Laya.VertexMesh.MESH_POSITION0,
             'a_Normal': Laya.VertexMesh.MESH_NORMAL0,
-            'a_Texcoord': Laya.VertexMesh.MESH_TEXTURECOORDINATE0
+            'a_Texcoord': Laya.VertexMesh.MESH_TEXTURECOORDINATE0,
+            'a_BoneWeights': Laya.VertexMesh.MESH_BLENDWEIGHT0, 
+            'a_BoneIndices': Laya.VertexMesh.MESH_BLENDINDICES0
         }
         var uniformMap = {
+            'u_Bones': Laya.Shader3D.PERIOD_CUSTOM,
             'u_MvpMatrix': Laya.Shader3D.PERIOD_SPRITE,
             'u_WorldMat': Laya.Shader3D.PERIOD_SPRITE,
             'u_Texture': Laya.Shader3D.PERIOD_MATERIAL,
@@ -47,13 +50,31 @@ export default class OutlineMaterial extends Laya.BaseMaterial {
             attribute vec4 a_Position;
             attribute vec3 a_Normal;
             varying vec3 v_Normal;
+            #ifdef BONE
+                attribute vec4 a_BoneIndices;
+                attribute vec4 a_BoneWeights;
+                const int c_MaxBoneCount = 24;
+                uniform mat4 u_Bones[c_MaxBoneCount];
+            #endif   
             void main()
             {
-                gl_Position = u_MvpMatrix * a_Position;
-                mat3 worldMat = mat3(u_WorldMat);
+                #ifdef BONE
+                    mat4 skinTransform=mat4(0.0);
+                    skinTransform += u_Bones[int(a_BoneIndices.x)] * a_BoneWeights.x;
+                    skinTransform += u_Bones[int(a_BoneIndices.y)] * a_BoneWeights.y;
+                    skinTransform += u_Bones[int(a_BoneIndices.z)] * a_BoneWeights.z;
+                    skinTransform += u_Bones[int(a_BoneIndices.w)] * a_BoneWeights.w;
+                    vec4 position = skinTransform * a_Position;
+                    gl_Position = u_MvpMatrix * position;
+                    mat3 worldMat=mat3(u_WorldMat * skinTransform);
+                #else
+                    gl_Position = u_MvpMatrix * a_Position;
+                    mat3 worldMat = mat3(u_WorldMat);
+                #endif
                 v_Normal = worldMat * a_Normal;
                 gl_Position.xy += v_Normal.xy * u_OutlineWidth;
             }`
+
         var outline_ps = `
             #ifdef FSHIGHPRECISION
                 precision highp float;
@@ -77,13 +98,31 @@ export default class OutlineMaterial extends Laya.BaseMaterial {
 
             uniform mat4 u_MvpMatrix;
             uniform mat4 u_WorldMat;
-            
+
+            #ifdef BONE
+                attribute vec4 a_BoneIndices;
+                attribute vec4 a_BoneWeights;
+                const int c_MaxBoneCount = 24;
+                uniform mat4 u_Bones[c_MaxBoneCount];
+            #endif 
+
             void main()
             {
-                mat3 worldMat = mat3(u_WorldMat);
+                #ifdef BONE
+                    mat4 skinTransform=mat4(0.0);
+                    skinTransform += u_Bones[int(a_BoneIndices.x)] * a_BoneWeights.x;
+                    skinTransform += u_Bones[int(a_BoneIndices.y)] * a_BoneWeights.y;
+                    skinTransform += u_Bones[int(a_BoneIndices.z)] * a_BoneWeights.z;
+                    skinTransform += u_Bones[int(a_BoneIndices.w)] * a_BoneWeights.w;
+                    vec4 position = skinTransform * a_Position;
+                    gl_Position = u_MvpMatrix * position;
+                    mat3 worldMat = mat3(u_WorldMat * skinTransform);
+                #else
+                    gl_Position = u_MvpMatrix * a_Position;
+                    mat3 worldMat = mat3(u_WorldMat);
+                #endif
                 v_Normal = worldMat * a_Normal;
                 v_Texcoord = a_Texcoord;
-                gl_Position = u_MvpMatrix * a_Position;
             }`
 
         var base_ps = `
@@ -107,9 +146,7 @@ export default class OutlineMaterial extends Laya.BaseMaterial {
         customShader.addSubShader(subShader);
         subShader.addShaderPass(outline_vs, outline_ps);
         subShader.addShaderPass(base_vs, base_ps);
-
         this.setShaderName("OutlineShader");
-
         this.getRenderState(0).cull = 1;
     }
 
