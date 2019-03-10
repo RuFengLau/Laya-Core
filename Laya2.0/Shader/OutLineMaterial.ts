@@ -18,7 +18,7 @@ export default class OutlineMaterial extends Laya.BaseMaterial {
     }
 
     /**
-     * 设置
+     * 设置描边宽度
      */
     public set OutlineWidth(value: number) {
         this._shaderValues.setNumber(OutlineMaterial.OUTLINEWIDTH, value)
